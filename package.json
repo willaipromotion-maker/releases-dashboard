@@ -1,0 +1,32 @@
+{
+  "name": "releases-dashboard",
+  "version": "1.0.0",
+  "description": "AI-powered music trends dashboard for independent artists",
+  "main": "index.js",
+  "scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "next lint"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/willaipromotion-maker/releases-dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/willaipromotion-maker/releases-dashboard/issues"
+  },
+  "homepage": "https://github.com/willaipromotion-maker/releases-dashboard#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "axios": "^1.13.5",
+    "next": "^16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.7.0"
+  }
+}
