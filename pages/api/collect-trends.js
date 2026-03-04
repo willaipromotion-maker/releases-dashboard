@@ -31,7 +31,6 @@ export default async function handler(req, res) {
       .from('genres')
       .select('*')
       .order('name')
-      .limit(1)
 
     // ✅ FIX 3: Check the Supabase error object, not just the data.
     if (genreError) throw new Error(`Supabase error: ${genreError.message}`)
