@@ -38,60 +38,57 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'No genres found' })
     }
 
-    const genre = genres[0]
-    console.log(`Processing genre: ${genre.name}`)
+    const genreResults = []
 
-    // ✅ FIX 4: Call all platforms in PARALLEL instead of sequentially.
-    // Sequential: 5 platforms x ~10s each = ~50s (always times out).
-    // Parallel: all 5 fire at once, done in ~10-15s total.
-    const results = await Promise.allSettled(
-      PLATFORMS.map(platform => researchTrendsForPlatform(genre.name, platform))
-    )
+for (const genre of genres) {
+  console.log(`Processing genre: ${genre.name}`)
 
-    const allTrends = []
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        allTrends.push(...result.value)
-      } else {
-        // Log failures per platform but don't abort the whole job.
-        console.error('Platform fetch failed:', result.reason?.message)
-      }
+  const results = await Promise.allSettled(
+    PLATFORMS.map(platform => researchTrendsForPlatform(genre.name, platform))
+  )
+
+  const allTrends = []
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      allTrends.push(...result.value)
+    } else {
+      console.error('Platform fetch failed:', result.reason?.message)
     }
+  }
 
-    console.log(`Got ${allTrends.length} total trends across all platforms`)
+  console.log(`Got ${allTrends.length} trends for ${genre.name}`)
 
-    if (allTrends.length > 0) {
-      const { error: insertError } = await supabase
-        .from('trends')
-        .insert(
-          allTrends.map(trend => ({
-            genre_id: genre.id,
-            platform: trend.platform,
-            trend_name: trend.trend_name,
-            trend_description: trend.trend_description,
-            is_growing: trend.is_growing,
-            data_value: trend.data_value,
-            last_updated: new Date().toISOString()
-          }))
-        )
+  if (allTrends.length > 0) {
+    const { error: insertError } = await supabase
+      .from('trends')
+      .insert(
+        allTrends.map(trend => ({
+          genre_id: genre.id,
+          platform: trend.platform,
+          trend_name: trend.trend_name,
+          trend_description: trend.trend_description,
+          is_growing: trend.is_growing,
+          data_value: trend.data_value,
+          last_updated: new Date().toISOString()
+        }))
+      )
 
-      if (insertError) {
-        console.error('Insert error:', insertError)
-        return res.status(500).json({ error: `Database insert error: ${insertError.message}` })
-      }
+    if (insertError) {
+      console.error(`Insert error for ${genre.name}:`, insertError)
     }
+  }
 
-    return res.status(200).json({
-      success: true,
-      genre: genre.name,
-      trendsProcessed: allTrends.length,
-      platformResults: results.map((r, i) => ({
-        platform: PLATFORMS[i],
-        status: r.status,
-        count: r.status === 'fulfilled' ? r.value.length : 0,
-        error: r.status === 'rejected' ? r.reason?.message : undefined
-      }))
-    })
+  genreResults.push({
+    genre: genre.name,
+    trendsProcessed: allTrends.length
+  })
+}
+
+return res.status(200).json({
+  success: true,
+  results: genreResults,
+  totalGenres: genreResults.length
+})
 
   } catch (error) {
     console.error('Handler error:', error.message)
