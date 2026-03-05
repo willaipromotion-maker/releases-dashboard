@@ -10,15 +10,27 @@ const PLATFORMS = ['Spotify', 'TikTok', 'YouTube', 'Instagram Reels', 'Music Pub
 const CLAUDE_TIMEOUT_MS = 25_000
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  // Accept both GET (Vercel cron) and POST (manual testing)
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // GET requests come from Vercel cron — verify the secret
+  if (req.method === 'GET') {
+    const authHeader = req.headers['authorization']
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
   }
 
   try {
     console.log('=== STARTING TREND COLLECTION ===')
 
-    const body = req.body || {}
-    const genreFilter = body.genre || null
+    // GET: read genre from query string (?genre=Hip-Hop)
+    // POST: read genre from request body ({ "genre": "Hip-Hop" })
+    const genreFilter = req.method === 'GET'
+      ? (req.query.genre || null)
+      : (req.body?.genre || null)
 
     const { data: genres, error: genreError } = await supabase
       .from('genres')
@@ -30,8 +42,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'No genres found' })
     }
 
-    // If a genre name was passed in the request body, process only that one.
-    // Otherwise default to the first genre (safe fallback for manual testing).
     const genresToProcess = genreFilter
       ? genres.filter(g => g.name.toLowerCase() === genreFilter.toLowerCase())
       : [genres[0]]
@@ -61,6 +71,16 @@ export default async function handler(req, res) {
       console.log(`Got ${allTrends.length} trends for ${genre.name}`)
 
       if (allTrends.length > 0) {
+        // Delete existing trends for this genre before inserting fresh ones
+        const { error: deleteError } = await supabase
+          .from('trends')
+          .delete()
+          .eq('genre_id', genre.id)
+      
+        if (deleteError) {
+          console.error(`Delete error for ${genre.name}:`, deleteError)
+        }
+      
         const { error: insertError } = await supabase
           .from('trends')
           .insert(

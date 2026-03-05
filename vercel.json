@@ -1,8 +1,14 @@
 {
   "crons": [
-    {
-      "path": "/api/cron-collect-trends",
-      "schedule": "0 9 * * *"
-    }
+    { "path": "/api/collect-trends?genre=Alternative", "schedule": "0 9 * * *" },
+    { "path": "/api/collect-trends?genre=Country", "schedule": "2 9 * * *" },
+    { "path": "/api/collect-trends?genre=Electronic+%2F+EDM", "schedule": "4 9 * * *" },
+    { "path": "/api/collect-trends?genre=Hip-Hop", "schedule": "6 9 * * *" },
+    { "path": "/api/collect-trends?genre=Indie", "schedule": "8 9 * * *" },
+    { "path": "/api/collect-trends?genre=Pop", "schedule": "10 9 * * *" },
+    { "path": "/api/collect-trends?genre=R%26B+%2F+Soul", "schedule": "12 9 * * *" },
+    { "path": "/api/collect-trends?genre=Rap", "schedule": "14 9 * * *" },
+    { "path": "/api/collect-trends?genre=Rock", "schedule": "16 9 * * *" },
+    { "path": "/api/collect-trends?genre=Solo+Acoustic+Singer%2FSongwriter", "schedule": "18 9 * * *" }
   ]
 }
