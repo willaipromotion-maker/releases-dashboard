@@ -157,7 +157,7 @@ async function researchTrendsForPlatform(genre, platform) {
 Return ONLY raw valid JSON — no markdown, no backticks, no explanation.
 
 Rules:
-- Return only trends that are genuinely relevant and distinct — as many or as few as actually apply
+-- Return only trends that are genuinely relevant and distinct — as many or as few as actually apply, up to a maximum of 8 per platform
 - Use consistent, standardized trend names (e.g. always "Bedroom Pop" not "Bedroom Pop Revival" or "Bedroom Pop Aesthetics")
 - Every trend must be unique within this platform — no two trends should overlap in meaning
 - trend_description must match is_growing: if true, describe it as rising or gaining traction; if false, describe it as declining or losing momentum
@@ -190,7 +190,7 @@ Rules:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 800,
+        max_tokens: 1500,
         messages: [{ role: 'user', content: prompt }]
       })
     })
