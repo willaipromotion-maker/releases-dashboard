@@ -9,13 +9,15 @@ export const config = {
 const PLATFORMS = ['Spotify', 'TikTok', 'YouTube', 'Instagram Reels', 'Music Publications']
 const CLAUDE_TIMEOUT_MS = 25_000
 
+// Flip this to true once web search is enabled
+const IS_VERIFIED = false
+const DATA_SOURCE = 'training_data'
+
 export default async function handler(req, res) {
-  // Accept both GET (Vercel cron) and POST (manual testing)
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // GET requests come from Vercel cron — verify the secret
   if (req.method === 'GET') {
     const authHeader = req.headers['authorization']
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -26,8 +28,6 @@ export default async function handler(req, res) {
   try {
     console.log('=== STARTING TREND COLLECTION ===')
 
-    // GET: read genre from query string (?genre=Hip-Hop)
-    // POST: read genre from request body ({ "genre": "Hip-Hop" })
     const genreFilter = req.method === 'GET'
       ? (req.query.genre || null)
       : (req.body?.genre || null)
@@ -76,12 +76,14 @@ export default async function handler(req, res) {
           .from('trends')
           .delete()
           .eq('genre_id', genre.id)
-      
+
         if (deleteError) {
           console.error(`Delete error for ${genre.name}:`, deleteError)
         }
-      
-        const { error: insertError } = await supabase
+
+        const now = new Date().toISOString()
+
+        const { data: insertedTrends, error: insertError } = await supabase
           .from('trends')
           .insert(
             allTrends.map(trend => ({
@@ -91,12 +93,33 @@ export default async function handler(req, res) {
               trend_description: trend.trend_description,
               is_growing: trend.is_growing,
               data_value: trend.data_value,
-              last_updated: new Date().toISOString()
+              is_verified: IS_VERIFIED,
+              last_updated: now
             }))
           )
+          .select()
 
         if (insertError) {
           console.error(`Insert error for ${genre.name}:`, insertError)
+        }
+
+        // Log each inserted trend to trend_history for historical tracking
+        if (insertedTrends && insertedTrends.length > 0) {
+          const { error: historyError } = await supabase
+            .from('trend_history')
+            .insert(
+              insertedTrends.map(trend => ({
+                trend_id: trend.id,
+                data_value: trend.data_value,
+                is_verified: IS_VERIFIED,
+                data_source: DATA_SOURCE,
+                recorded_at: now
+              }))
+            )
+
+          if (historyError) {
+            console.error(`History insert error for ${genre.name}:`, historyError)
+          }
         }
       }
 
@@ -133,11 +156,17 @@ async function researchTrendsForPlatform(genre, platform) {
 
 Return ONLY raw valid JSON — no markdown, no backticks, no explanation.
 
+Rules:
+- Return exactly 5 trends
+- Every trend must be unique — no two trends should overlap in meaning or subject matter
+- The trend_description must match the is_growing value: if is_growing is true, describe it as rising or gaining traction; if is_growing is false, describe it as declining or losing momentum
+- Keep trend_description under 50 words
+
 {
   "trends": [
     {
       "trend_name": "Short trend name",
-      "trend_description": "Under 50 words describing the trend",
+      "trend_description": "Under 50 words. Must match is_growing direction.",
       "is_growing": true,
       "data_value": 5000
     }
