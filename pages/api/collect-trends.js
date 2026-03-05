@@ -6,7 +6,7 @@ export const config = {
   runtime: 'nodejs'
 }
 
-const PLATFORMS = ['Spotify', 'TikTok', 'YouTube', 'Instagram Reels', 'Music Publications']
+const PLATFORMS = ['Spotify', 'TikTok', 'YouTube', 'Instagram Reels']
 const CLAUDE_TIMEOUT_MS = 25_000
 
 // Flip this to true once web search is enabled
@@ -152,21 +152,23 @@ async function researchTrendsForPlatform(genre, platform) {
 
   console.log(`Fetching trends: ${genre} / ${platform}`)
 
-  const prompt = `You are a music industry trend analyst. Analyze current trends in the "${genre}" genre on ${platform}.
+  const prompt = `You are a music industry trend analyst focused on independent and emerging artists. Analyze current trends in the "${genre}" genre on ${platform}.
 
 Return ONLY raw valid JSON — no markdown, no backticks, no explanation.
 
 Rules:
-- Return exactly 5 trends
-- Every trend must be unique — no two trends should overlap in meaning or subject matter
-- The trend_description must match the is_growing value: if is_growing is true, describe it as rising or gaining traction; if is_growing is false, describe it as declining or losing momentum
+- Return only trends that are genuinely relevant and distinct — as many or as few as actually apply
+- Use consistent, standardized trend names (e.g. always "Bedroom Pop" not "Bedroom Pop Revival" or "Bedroom Pop Aesthetics")
+- Every trend must be unique within this platform — no two trends should overlap in meaning
+- trend_description must match is_growing: if true, describe it as rising or gaining traction; if false, describe it as declining or losing momentum
+- Focus on what is actionable and useful for an independent artist deciding what to create or post today
 - Keep trend_description under 50 words
 
 {
   "trends": [
     {
-      "trend_name": "Short trend name",
-      "trend_description": "Under 50 words. Must match is_growing direction.",
+      "trend_name": "Standardized Trend Name",
+      "trend_description": "Under 50 words. Must match is_growing direction. Relevant to independent artists.",
       "is_growing": true,
       "data_value": 5000
     }
