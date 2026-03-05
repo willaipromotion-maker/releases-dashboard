@@ -158,7 +158,7 @@ Return ONLY raw valid JSON — no markdown, no backticks, no explanation.
 
 Rules:
 -- Return only trends that are genuinely relevant and distinct — as many or as few as actually apply, up to a maximum of 8 per platform
-- Use consistent, standardized trend names (e.g. always "Bedroom Pop" not "Bedroom Pop Revival" or "Bedroom Pop Aesthetics")
+- Use consistent, standardized trend names that are identical across platforms when referring to the same trend (e.g. always "Bedroom Pop" never "Bedroom Pop Revival" or "Bedroom Pop Aesthetics", always "Shoegaze" never "Shoegaze Revival")
 - Every trend must be unique within this platform — no two trends should overlap in meaning
 - trend_description must match is_growing: if true, describe it as rising or gaining traction; if false, describe it as declining or losing momentum
 - Focus on what is actionable and useful for an independent artist deciding what to create or post today
