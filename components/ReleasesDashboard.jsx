@@ -332,7 +332,7 @@ function PlatformBlock({ platform, trends, isExpanded, onToggle }) {
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 
 export default function ReleasesDashboard({ genres: GENRES = [], trends: ALL_TRENDS = {} }) {
-  const [activeGenre, setActiveGenre] = useState(1);
+  const [activeGenre, setActiveGenre] = useState(null);
   const [expandedPlatforms, setExpandedPlatforms] = useState({ Spotify: true });
   const [lastUpdated] = useState(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }));
 
@@ -340,16 +340,17 @@ export default function ReleasesDashboard({ genres: GENRES = [], trends: ALL_TRE
     setExpandedPlatforms((prev) => ({ ...prev, [platform]: !prev[platform] }));
   };
 
-  const currentTrends = ALL_TRENDS[activeGenre];
-  const currentGenre = GENRES.find((g) => g.id === activeGenre);
+  const resolvedGenre = activeGenre ?? GENRES[0]?.id ?? null;
+  const currentTrends = ALL_TRENDS[resolvedGenre] ?? {};
+  const currentGenre = GENRES.find((g) => g.id === resolvedGenre) ?? null;
 
   // Aggregate stats
   const totalGrowing = PLATFORMS.reduce((acc, p) => {
     return acc + (currentTrends[p]?.filter((t) => t.is_growing).length || 0);
   }, 0);
   const totalTrends = PLATFORMS.reduce((acc, p) => acc + (currentTrends[p]?.length || 0), 0);
-  const avgValue = Math.round(
-    PLATFORMS.reduce((acc, p) => acc + currentTrends[p].reduce((s, t) => s + t.data_value, 0), 0) / totalTrends
+  const avgValue = totalTrends === 0 ? 0 : Math.round(
+    PLATFORMS.reduce((acc, p) => acc + (currentTrends[p] ?? []).reduce((s, t) => s + t.data_value, 0), 0) / totalTrends
   );
 
   return (
