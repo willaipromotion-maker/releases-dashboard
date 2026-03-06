@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getTrendsByGenre, getGenres } from '@/lib/api'
+import { getTrendsByGenre, getGenres, getTrendHistory } from '@/lib/api'
+import ReleasesDashboard from '@/components/ReleasesDashboard'
 
 export default function Home() {
   const [trends, setTrends] = useState({})
@@ -13,11 +14,38 @@ export default function Home() {
     async function loadData() {
       try {
         setLoading(true)
-        const genreData = await getGenres()
+
+        const [genreData, rawTrends] = await Promise.all([
+          getGenres(),
+          getTrendsByGenre()
+        ])
+
         setGenres(genreData)
-        
-        const trendsData = await getTrendsByGenre()
-        setTrends(trendsData)
+
+        // Reshape data to match component format:
+        // { [genreId]: { [platform]: [ ...trends with history ] } }
+        const shaped = {}
+
+        for (const genre of genreData) {
+          shaped[genre.id] = {}
+          const genreTrends = rawTrends[genre.name] || []
+
+          for (const platform of ['Spotify', 'TikTok', 'YouTube', 'Instagram Reels']) {
+            const platformTrends = genreTrends.filter(t => t.platform === platform)
+
+            // Fetch history for each trend in parallel
+            const trendsWithHistory = await Promise.all(
+              platformTrends.map(async (trend) => ({
+                ...trend,
+                history: await getTrendHistory(trend.id)
+              }))
+            )
+
+            shaped[genre.id][platform] = trendsWithHistory
+          }
+        }
+
+        setTrends(shaped)
       } catch (err) {
         setError('Failed to load trends. Please try again.')
         console.error(err)
@@ -30,55 +58,39 @@ export default function Home() {
   }, [])
 
   if (loading) {
-    return <div className="loading">Loading trends...</div>
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0E0C08',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: "'DM Mono', monospace",
+        color: '#5A5448',
+        fontSize: '13px',
+        letterSpacing: '0.1em'
+      }}>
+        LOADING TRENDS...
+      </div>
+    )
   }
 
   if (error) {
-    return <div className="error">{error}</div>
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0E0C08',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: "'DM Mono', monospace",
+        color: '#E07070',
+        fontSize: '13px'
+      }}>
+        {error}
+      </div>
+    )
   }
 
-  return (
-    <div>
-      <header className="header">
-        <div className="container">
-          <h1>Music Trends Dashboard</h1>
-          <p>Real-time trends across Spotify, TikTok, and Instagram Reels</p>
-        </div>
-      </header>
-
-      <main className="container">
-        {genres.length === 0 ? (
-          <p>No genres available yet.</p>
-        ) : (
-          genres.map(genre => (
-            <section key={genre.id} className="genre-section">
-              <h2>{genre.name}</h2>
-              
-              {trends[genre.name] && trends[genre.name].length > 0 ? (
-                <ul className="trends-list">
-                  {trends[genre.name].map(trend => (
-                    <li key={trend.id} className="trend-item">
-                      <h3>{trend.trend_name}</h3>
-                      <span className="trend-platform">{trend.platform}</span>
-                      <span className={`trend-status ${trend.is_growing ? 'growing' : 'declining'}`}>
-                        {trend.is_growing ? '📈 Growing' : '📉 Declining'}
-                      </span>
-                      {trend.trend_description && (
-                        <p className="trend-description">{trend.trend_description}</p>
-                      )}
-                      <small style={{ color: '#999' }}>
-                        Updated: {new Date(trend.last_updated).toLocaleDateString()}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No trends for {genre.name} yet.</p>
-              )}
-            </section>
-          ))
-        )}
-      </main>
-    </div>
-  )
+  return <ReleasesDashboard genres={genres} trends={trends} />
 }
