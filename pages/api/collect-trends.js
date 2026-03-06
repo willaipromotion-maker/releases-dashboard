@@ -71,21 +71,13 @@ export default async function handler(req, res) {
       console.log(`Got ${allTrends.length} trends for ${genre.name}`)
 
       if (allTrends.length > 0) {
-        // Delete existing trends for this genre before inserting fresh ones
-        const { error: deleteError } = await supabase
-          .from('trends')
-          .delete()
-          .eq('genre_id', genre.id)
-
-        if (deleteError) {
-          console.error(`Delete error for ${genre.name}:`, deleteError)
-        }
-
         const now = new Date().toISOString()
 
-        const { data: insertedTrends, error: insertError } = await supabase
+        // Upsert trends — insert if new, update if exists (matched on genre_id + platform + trend_name)
+        // This keeps the trend ID stable so trend_history accumulates correctly over time
+        const { data: upsertedTrends, error: upsertError } = await supabase
           .from('trends')
-          .insert(
+          .upsert(
             allTrends.map(trend => ({
               genre_id: genre.id,
               platform: trend.platform,
@@ -95,20 +87,21 @@ export default async function handler(req, res) {
               data_value: trend.data_value,
               is_verified: IS_VERIFIED,
               last_updated: now
-            }))
+            })),
+            { onConflict: 'genre_id,platform,trend_name' }
           )
           .select()
 
-        if (insertError) {
-          console.error(`Insert error for ${genre.name}:`, insertError)
+        if (upsertError) {
+          console.error(`Upsert error for ${genre.name}:`, upsertError)
         }
 
-        // Log each inserted trend to trend_history for historical tracking
-        if (insertedTrends && insertedTrends.length > 0) {
+        // Log each trend to trend_history for historical tracking
+        if (upsertedTrends && upsertedTrends.length > 0) {
           const { error: historyError } = await supabase
             .from('trend_history')
             .insert(
-              insertedTrends.map(trend => ({
+              upsertedTrends.map(trend => ({
                 trend_id: trend.id,
                 data_value: trend.data_value,
                 is_verified: IS_VERIFIED,
@@ -119,6 +112,23 @@ export default async function handler(req, res) {
 
           if (historyError) {
             console.error(`History insert error for ${genre.name}:`, historyError)
+          }
+        }
+
+        // Remove trends that Claude no longer considers relevant for this genre+platform
+        const newTrendNames = allTrends.map(t => t.trend_name)
+        for (const platform of PLATFORMS) {
+          const platformTrends = allTrends.filter(t => t.platform === platform).map(t => t.trend_name)
+          
+          const { error: deleteError } = await supabase
+            .from('trends')
+            .delete()
+            .eq('genre_id', genre.id)
+            .eq('platform', platform)
+            .not('trend_name', 'in', `(${platformTrends.map(n => `"${n}"`).join(',')})`)
+
+          if (deleteError) {
+            console.error(`Cleanup error for ${genre.name}/${platform}:`, deleteError)
           }
         }
       }
@@ -157,7 +167,7 @@ async function researchTrendsForPlatform(genre, platform) {
 Return ONLY raw valid JSON — no markdown, no backticks, no explanation.
 
 Rules:
--- Return only trends that are genuinely relevant and distinct — as many or as few as actually apply, up to a maximum of 8 per platform
+- Return only trends that are genuinely relevant and distinct — as many or as few as actually apply, up to a maximum of 8 per platform
 - Use consistent, standardized trend names that are identical across platforms when referring to the same trend (e.g. always "Bedroom Pop" never "Bedroom Pop Revival" or "Bedroom Pop Aesthetics", always "Shoegaze" never "Shoegaze Revival")
 - Every trend must be unique within this platform — no two trends should overlap in meaning
 - trend_description must match is_growing: if true, describe it as rising or gaining traction; if false, describe it as declining or losing momentum
