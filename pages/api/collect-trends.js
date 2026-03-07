@@ -73,62 +73,90 @@ export default async function handler(req, res) {
       if (allTrends.length > 0) {
         const now = new Date().toISOString()
 
-        // Upsert trends — insert if new, update if exists (matched on genre_id + platform + trend_name)
-        // This keeps the trend ID stable so trend_history accumulates correctly over time
-        const { data: upsertedTrends, error: upsertError } = await supabase
-          .from('trends')
-          .upsert(
-            allTrends.map(trend => ({
-              genre_id: genre.id,
-              platform: trend.platform,
-              trend_name: trend.trend_name,
-              trend_description: trend.trend_description,
-              is_growing: trend.is_growing,
-              data_value: trend.data_value,
-              is_verified: IS_VERIFIED,
-              last_updated: now
-            })),
-            { onConflict: 'genre_id,platform,trend_name' }
-          )
-          .select()
-
-        if (upsertError) {
-          console.error(`Upsert error for ${genre.name}:`, upsertError)
-        }
-
-        // Log each trend to trend_history for historical tracking
-        if (upsertedTrends && upsertedTrends.length > 0) {
-          const { error: historyError } = await supabase
-            .from('trend_history')
-            .insert(
-              upsertedTrends.map(trend => ({
-                trend_id: trend.id,
-                data_value: trend.data_value,
-                is_verified: IS_VERIFIED,
-                data_source: DATA_SOURCE,
-                recorded_at: now
-              }))
-            )
-
-          if (historyError) {
-            console.error(`History insert error for ${genre.name}:`, historyError)
-          }
-        }
-
-        // Remove trends that Claude no longer considers relevant for this genre+platform
-        const newTrendNames = allTrends.map(t => t.trend_name)
         for (const platform of PLATFORMS) {
-          const platformTrends = allTrends.filter(t => t.platform === platform).map(t => t.trend_name)
-          
-          const { error: deleteError } = await supabase
+          const platformTrends = allTrends.filter(t => t.platform === platform)
+          if (platformTrends.length === 0) continue
+
+          // Fetch existing active trends for this genre/platform
+          const { data: existingTrends } = await supabase
             .from('trends')
-            .delete()
+            .select('id, trend_name')
             .eq('genre_id', genre.id)
             .eq('platform', platform)
-            .not('trend_name', 'in', `(${platformTrends.map(n => `"${n.replace(/"/g, '\\"')}"`).join(',')})`)
 
-          if (deleteError) {
-            console.error(`Cleanup error for ${genre.name}/${platform}:`, deleteError)
+          const existingMap = {}
+          for (const t of (existingTrends || [])) {
+            existingMap[t.trend_name] = t.id
+          }
+
+          const newTrendNames = platformTrends.map(t => t.trend_name)
+
+          // Trends that are no longer returned by Claude today
+          const staleNames = Object.keys(existingMap).filter(
+            name => !newTrendNames.includes(name)
+          )
+
+          // Remove stale trends from active trends table
+          // Their history remains intact in trend_history
+          if (staleNames.length > 0) {
+            const staleIds = staleNames.map(name => existingMap[name])
+            const { error: deleteError } = await supabase
+              .from('trends')
+              .delete()
+              .in('id', staleIds)
+
+            if (deleteError) {
+              console.error(`Stale delete error for ${genre.name}/${platform}:`, deleteError)
+            } else {
+              console.log(`  Removed ${staleNames.length} stale trends from ${platform}`)
+            }
+          }
+
+          // Upsert today's trends — insert new, update existing
+          const { data: upsertedTrends, error: upsertError } = await supabase
+            .from('trends')
+            .upsert(
+              platformTrends.map(trend => ({
+                genre_id: genre.id,
+                platform: trend.platform,
+                trend_name: trend.trend_name,
+                trend_description: trend.trend_description,
+                is_growing: trend.is_growing,
+                data_value: trend.data_value,
+                is_verified: IS_VERIFIED,
+                last_updated: now
+              })),
+              { onConflict: 'genre_id,platform,trend_name' }
+            )
+            .select()
+
+          if (upsertError) {
+            console.error(`Upsert error for ${genre.name}/${platform}:`, upsertError)
+            continue
+          }
+
+          // Log every trend returned today to trend_history
+          // Includes genre_id, platform, trend_name so history is
+          // queryable even after a trend is removed from active trends
+          if (upsertedTrends && upsertedTrends.length > 0) {
+            const { error: historyError } = await supabase
+              .from('trend_history')
+              .insert(
+                upsertedTrends.map(trend => ({
+                  trend_id: trend.id,
+                  trend_name: trend.trend_name,
+                  genre_id: genre.id,
+                  platform: trend.platform,
+                  data_value: trend.data_value,
+                  is_verified: IS_VERIFIED,
+                  data_source: DATA_SOURCE,
+                  recorded_at: now
+                }))
+              )
+
+            if (historyError) {
+              console.error(`History insert error for ${genre.name}/${platform}:`, historyError)
+            }
           }
         }
       }
