@@ -125,7 +125,7 @@ export default async function handler(req, res) {
             .delete()
             .eq('genre_id', genre.id)
             .eq('platform', platform)
-            .not('trend_name', 'in', `(${platformTrends.map(n => `"${n}"`).join(',')})`)
+            .not('trend_name', 'in', `(${platformTrends.map(n => `"${n.replace(/"/g, '\\"')}"`).join(',')})`)
 
           if (deleteError) {
             console.error(`Cleanup error for ${genre.name}/${platform}:`, deleteError)
